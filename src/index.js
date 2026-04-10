@@ -1,0 +1,129 @@
+// src/index.js
+// FinnGoBot — Entry point
+// Supports webhook mode (production/Render) and long-polling (local dev)
+
+import "node:process";
+import { Telegraf } from "telegraf";
+import { message } from "telegraf/filters";
+
+import prisma from "./services/prisma.js";
+import { startScheduler } from "./services/scheduler.js";
+import { rateLimiter } from "./middleware/rateLimiter.js";
+import { sessionMiddleware } from "./middleware/session.js";
+import { handleMessage } from "./handlers/messageHandler.js";
+import { registerCallbacks } from "./handlers/callbackHandler.js";
+import {
+  handleStart,
+  handleHelp,
+  handleSummaryCommand,
+  handleWeekCommand,
+  handleDebtsCommand,
+  handleBudgetCommand,
+  handleExportCommand,
+  handleExportDebtsCommand,
+} from "./handlers/commandHandlers.js";
+
+// ── Validate environment ──────────────────────────────────────────────────────
+const REQUIRED_ENV = ["TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "DATABASE_URL"];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`❌ Missing required environment variable: ${key}`);
+    process.exit(1);
+  }
+}
+
+// ── Bot setup ─────────────────────────────────────────────────────────────────
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+
+// ── Global middleware (order matters) ─────────────────────────────────────────
+
+// 1. Logger
+bot.use(async (ctx, next) => {
+  const user = ctx.from;
+  const text = ctx.message?.text ?? ctx.callbackQuery?.data ?? "[non-text]";
+  console.log(`[IN] @${user?.username ?? user?.id}: ${text}`);
+  return next();
+});
+
+// 2. Rate limiter — drop spam before it hits the DB or Gemini
+bot.use(rateLimiter);
+
+// 3. Session — attaches ctx.session for multi-step flows
+bot.use(sessionMiddleware);
+
+// ── Command handlers ──────────────────────────────────────────────────────────
+bot.start(handleStart);
+bot.help(handleHelp);
+bot.command("summary", handleSummaryCommand);
+bot.command("week", handleWeekCommand);
+bot.command("debts", handleDebtsCommand);
+bot.command("budget", handleBudgetCommand);
+bot.command("export", handleExportCommand);
+bot.command("exportdebts", handleExportDebtsCommand);
+
+// ── Inline keyboard callback handlers ────────────────────────────────────────
+registerCallbacks(bot);
+
+// ── Natural language message handler ─────────────────────────────────────────
+bot.on(message("text"), handleMessage);
+
+// ── Global error boundary ─────────────────────────────────────────────────────
+bot.catch((err, ctx) => {
+  console.error(`[BOT] Unhandled error for ${ctx.updateType}:`, err);
+  ctx.reply("⚠️ Something went wrong. Please try again.").catch(() => {});
+});
+
+// ── Launch ────────────────────────────────────────────────────────────────────
+async function launch() {
+  try {
+    await prisma.$connect();
+    console.log("✅ Database connected.");
+  } catch (err) {
+    console.error("❌ Database connection failed:", err.message);
+    process.exit(1);
+  }
+
+  const isProduction = process.env.NODE_ENV === "production";
+  const webhookDomain = process.env.WEBHOOK_DOMAIN;
+
+  if (isProduction && webhookDomain) {
+    // Webhook mode — used on Render / any hosted environment
+    const port = parseInt(process.env.WEBHOOK_PORT ?? "3000", 10);
+    const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+
+    await bot.launch({
+      webhook: {
+        domain: webhookDomain,
+        path: webhookPath,
+        port,
+      },
+    });
+
+    console.log(`🚀 FinnGoBot running in webhook mode on port ${port}`);
+    console.log(`   Webhook: ${webhookDomain}${webhookPath}`);
+  } else {
+    // Long-polling — local development
+    await bot.launch();
+    console.log("🚀 FinnGoBot running in long-polling mode (dev)");
+  }
+
+  startScheduler(bot);
+  console.log("✅ Finn is online and ready.\n");
+}
+
+launch();
+
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+process.once("SIGINT", async () => {
+  console.log("\n[SHUTDOWN] SIGINT — stopping...");
+  bot.stop("SIGINT");
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.once("SIGTERM", async () => {
+  console.log("\n[SHUTDOWN] SIGTERM — stopping...");
+  bot.stop("SIGTERM");
+  await prisma.$disconnect();
+  process.exit(0);
+});
