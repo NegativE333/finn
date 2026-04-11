@@ -25,7 +25,7 @@ import {
 } from "./handlers/commandHandlers.js";
 
 // ── Validate environment ──────────────────────────────────────────────────────
-const REQUIRED_ENV = ["TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "DATABASE_URL"];
+const REQUIRED_ENV = ["TELEGRAM_BOT_TOKEN", "GROQ_API_KEY", "DATABASE_URL"];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     console.error(`Missing required environment variable: ${key}`);
@@ -46,7 +46,7 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-// 2. Rate limiter — drop spam before it hits the DB or Gemini
+// 2. Rate limiter — drop spam before it hits the DB or Groq
 bot.use(rateLimiter);
 
 // 3. Session — attaches ctx.session for multi-step flows

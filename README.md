@@ -21,7 +21,7 @@ A "headless" personal finance assistant for Telegram. Track expenses and debts v
 |-------|-----------|
 | Runtime | Node.js 20+ (ESM) |
 | Bot Framework | Telegraf v4 |
-| NLP | Gemini 1.5 Flash |
+| NLP | Groq (`llama-3.1-8b-instant` by default) |
 | Database | PostgreSQL (Supabase / Neon) |
 | ORM | Prisma |
 | Scheduler | node-cron |
@@ -42,7 +42,7 @@ finngobot/
 │   │   └── commandHandlers.js # /start, /help, /summary, etc.
 │   ├── services/
 │   │   ├── prisma.js          # Prisma client singleton
-│   │   ├── nlp.js             # Gemini intent parsing
+│   │   ├── nlp.js             # Groq intent parsing (JSON mode)
 │   │   ├── userService.js     # User upsert / lookup
 │   │   ├── transactionService.js  # Expense CRUD
 │   │   ├── debtService.js     # Debt CRUD & settlement
@@ -76,8 +76,10 @@ Fill in your `.env`:
 
 ```env
 TELEGRAM_BOT_TOKEN=   # From @BotFather
-GEMINI_API_KEY=       # From Google AI Studio
-DATABASE_URL=         # PostgreSQL connection string (Supabase/Neon)
+GROQ_API_KEY=         # From console.groq.com
+GROQ_MODEL=           # Optional; default llama-3.1-8b-instant
+DATABASE_URL=         # PostgreSQL (pooled URI if using Supabase pooler)
+DIRECT_URL=           # Direct Postgres URL for Prisma migrations (Supabase)
 WEBHOOK_DOMAIN=       # Your Render URL (production only)
 ```
 
@@ -155,7 +157,7 @@ debts          → id, user_id, person_name, amount*, note, due_date, is_settled
 
 ## Extending Finn
 
-- **Voice messages**: Add a handler for `message("voice")` and use Gemini's audio input
+- **Voice messages**: Add a handler for `message("voice")` and transcribe (e.g. Groq Whisper or another STT API)
 - **Budget alerts**: Add a `budget` table and check limits in `handleExpense`
 - **Recurring expenses**: Add a `is_recurring` flag and monthly auto-log cron
 - **Export**: Add a `/export` command that generates a CSV via `csv-stringify`

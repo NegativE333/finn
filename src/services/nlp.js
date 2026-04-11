@@ -1,15 +1,14 @@
 // src/services/nlp.js
-// Gemini — natural language → structured intent JSON
-// Model IDs change over time; override with GEMINI_MODEL if Google renames endpoints.
+// Groq (OpenAI-compatible) — natural language → structured intent JSON
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant";
 
 // ── System prompt ─────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are a financial intent parser for a personal finance Telegram bot. 
-Extract structured data from the user's message and return ONLY a valid JSON object — no markdown, no explanation, no code fences.
+const SYSTEM_PROMPT = `You are a financial intent parser for a personal finance Telegram bot.
+Extract structured data from the user's message and respond with a single JSON object only — no markdown, no explanation, no code fences.
 
 The JSON must follow this exact schema:
 {
@@ -55,18 +54,23 @@ Examples:
  */
 export async function parseIntent(message) {
   try {
-    const model = genAI.getGenerativeModel({
-      model: GEMINI_MODEL,
-      systemInstruction: SYSTEM_PROMPT,
+    const completion = await groq.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: message },
+      ],
+      temperature: 0,
+      response_format: { type: "json_object" },
     });
 
-    const result = await model.generateContent(message);
-    const raw = result.response.text().trim();
+    const raw = completion.choices[0]?.message?.content?.trim();
+    if (!raw) {
+      console.error("[NLP] Empty completion from Groq");
+      return { action: "UNKNOWN" };
+    }
 
-    // Strip any accidental markdown fences just in case
-    const clean = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-    const intent = JSON.parse(clean);
-
+    const intent = JSON.parse(raw);
     return intent;
   } catch (err) {
     console.error("[NLP] Failed to parse intent:", err.message);
