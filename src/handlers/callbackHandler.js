@@ -21,20 +21,20 @@ export function registerCallbacks(bot) {
       const txn = await prisma.transaction.findUnique({ where: { id: txnId } });
 
       if (!txn || txn.userId !== user.id) {
-        await ctx.answerCbQuery("❌ Transaction not found or already deleted.");
+        await ctx.answerCbQuery("Transaction not found or already removed.");
         return ctx.editMessageReplyMarkup({ inline_keyboard: [] });
       }
 
       await prisma.transaction.delete({ where: { id: txnId } });
 
-      await ctx.answerCbQuery("✅ Transaction deleted.");
+      await ctx.answerCbQuery("Removed.");
       await ctx.editMessageText(
-        `🗑 Deleted: *${fmt(txn.amount)}* for ${txn.category}${txn.note ? ` (${txn.note})` : ""}`,
+        `Removed: *${fmt(txn.amount)}* · ${txn.category}${txn.note ? ` · ${txn.note}` : ""}`,
         { parse_mode: "Markdown" }
       );
     } catch (err) {
       console.error("[CB] undo_txn error:", err);
-      await ctx.answerCbQuery("⚠️ Could not delete. Try again.");
+      await ctx.answerCbQuery("Could not remove. Try again.");
     }
   });
 
@@ -47,21 +47,21 @@ export function registerCallbacks(bot) {
       const debt = await prisma.debt.findUnique({ where: { id: debtId } });
 
       if (!debt || debt.userId !== user.id) {
-        await ctx.answerCbQuery("❌ Debt record not found or already deleted.");
+        await ctx.answerCbQuery("Debt record not found or already removed.");
         return ctx.editMessageReplyMarkup({ inline_keyboard: [] });
       }
 
       await prisma.debt.delete({ where: { id: debtId } });
 
       const type = Number(debt.amount) > 0 ? "Lent" : "Borrowed";
-      await ctx.answerCbQuery("✅ Debt record deleted.");
+      await ctx.answerCbQuery("Removed.");
       await ctx.editMessageText(
-        `🗑 Removed: *${type} ${fmt(Math.abs(Number(debt.amount)))}* with ${debt.personName}`,
+        `Removed: *${type} ${fmt(Math.abs(Number(debt.amount)))}* · ${debt.personName}`,
         { parse_mode: "Markdown" }
       );
     } catch (err) {
       console.error("[CB] undo_debt error:", err);
-      await ctx.answerCbQuery("⚠️ Could not delete. Try again.");
+      await ctx.answerCbQuery("Could not remove. Try again.");
     }
   });
 
@@ -72,13 +72,13 @@ export function registerCallbacks(bot) {
 
     try {
       await deleteBudget(user.id, category);
-      await ctx.answerCbQuery(`✅ Budget for ${category} removed.`);
-      await ctx.editMessageText(`🗑 Removed budget for *${category}*.`, {
+      await ctx.answerCbQuery(`Budget removed.`);
+      await ctx.editMessageText(`Budget removed: *${category}*`, {
         parse_mode: "Markdown",
       });
     } catch (err) {
       console.error("[CB] del_budget error:", err);
-      await ctx.answerCbQuery("⚠️ Could not remove budget.");
+      await ctx.answerCbQuery("Could not remove budget.");
     }
   });
 

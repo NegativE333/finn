@@ -40,7 +40,7 @@ export async function rateLimiter(ctx, next) {
     // Only warn once per window (at the exact threshold crossing)
     if (entry.count === MAX_REQUESTS + 1) {
       await ctx.reply(
-        "⏳ You're sending messages too quickly. Please wait a moment."
+        "You're sending messages too quickly. Please wait a moment."
       );
     }
     return; // Drop the message

@@ -2,6 +2,7 @@
 // FinnGoBot — Entry point
 // Supports webhook mode (production/Render) and long-polling (local dev)
 
+import "dotenv/config";
 import "node:process";
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
@@ -27,7 +28,7 @@ import {
 const REQUIRED_ENV = ["TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "DATABASE_URL"];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
-    console.error(`❌ Missing required environment variable: ${key}`);
+    console.error(`Missing required environment variable: ${key}`);
     process.exit(1);
   }
 }
@@ -70,23 +71,27 @@ bot.on(message("text"), handleMessage);
 // ── Global error boundary ─────────────────────────────────────────────────────
 bot.catch((err, ctx) => {
   console.error(`[BOT] Unhandled error for ${ctx.updateType}:`, err);
-  ctx.reply("⚠️ Something went wrong. Please try again.").catch(() => {});
+  ctx.reply("Something went wrong. Please try again.").catch(() => {});
 });
 
 // ── Launch ────────────────────────────────────────────────────────────────────
 async function launch() {
   try {
     await prisma.$connect();
-    console.log("✅ Database connected.");
+    console.log("Database connected.");
   } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
+    console.error("Database connection failed:", err.message);
     process.exit(1);
   }
 
   const isProduction = process.env.NODE_ENV === "production";
   const webhookDomain = process.env.WEBHOOK_DOMAIN;
+  const useWebhook = isProduction && Boolean(webhookDomain);
+  console.log(
+    `[BOOT] Telegram: ${useWebhook ? "webhook" : "long-polling"} | NODE_ENV=${process.env.NODE_ENV ?? "(unset)"}`
+  );
 
-  if (isProduction && webhookDomain) {
+  if (useWebhook) {
     // Webhook mode — used on Render / any hosted environment
     const port = parseInt(process.env.WEBHOOK_PORT ?? "3000", 10);
     const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
@@ -99,16 +104,18 @@ async function launch() {
       },
     });
 
-    console.log(`🚀 FinnGoBot running in webhook mode on port ${port}`);
-    console.log(`   Webhook: ${webhookDomain}${webhookPath}`);
+    console.log(`Finn webhook listening on port ${port}`);
+    console.log(`Webhook: ${webhookDomain}${webhookPath}`);
+    startScheduler(bot);
+    console.log("Finn is online.\n");
   } else {
-    // Long-polling — local development
+    // Long-polling: Telegraf awaits an infinite getUpdates loop, so code after
+    // bot.launch() would never run. Scheduler + logs must come first.
+    console.log("Finn long-polling (dev)");
+    startScheduler(bot);
+    console.log("Finn is online.\n");
     await bot.launch();
-    console.log("🚀 FinnGoBot running in long-polling mode (dev)");
   }
-
-  startScheduler(bot);
-  console.log("✅ Finn is online and ready.\n");
 }
 
 launch();

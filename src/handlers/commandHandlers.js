@@ -19,41 +19,41 @@ export async function handleStart(ctx) {
   const name = ctx.from.first_name ?? "there";
 
   await ctx.replyWithMarkdown(
-    `👋 Hey *${name}*, I'm *Finn* — your personal finance assistant!\n\n` +
-    `Just talk to me naturally:\n` +
-    `• "Spent 300 on groceries"\n` +
-    `• "Lent 1000 to Riya for dinner"\n` +
-    `• "How much did I spend this week?"\n` +
-    `• "Who owes me money?"\n` +
-    `• "Set budget 5000 for Food"\n\n` +
-    `Use /help for the full command list.`
+    `Hello *${name}*,\n\n` +
+    `I'm *Finn*, your finance assistant. You can type in plain language, for example:\n` +
+    `• Spent 300 on groceries\n` +
+    `• Lent 1000 to Riya for dinner\n` +
+    `• How much did I spend this week?\n` +
+    `• Who owes me money?\n` +
+    `• Set budget 5000 for Food\n\n` +
+    `Use /help for commands and examples.`
   );
 }
 
 // ── /help ─────────────────────────────────────────────────────────────────────
 export async function handleHelp(ctx) {
   await ctx.replyWithMarkdown(
-    `📖 *Finn — Quick Reference*\n\n` +
+    `*Finn · Help*\n\n` +
     `*Logging*\n` +
-    `• "Spent [amount] on [thing]"\n` +
-    `• "Paid [amount] for [thing]"\n` +
-    `• "Lent [amount] to [name]"\n` +
-    `• "Borrowed [amount] from [name]"\n` +
-    `• "[name] paid me back [amount]"\n\n` +
+    `• Spent [amount] on [thing]\n` +
+    `• Paid [amount] for [thing]\n` +
+    `• Lent [amount] to [name]\n` +
+    `• Borrowed [amount] from [name]\n` +
+    `• [name] paid me back [amount]\n\n` +
     `*Queries*\n` +
-    `• "How much did I spend today/this week/this month?"\n` +
-    `• "Who owes me money?" / "What do I owe?"\n` +
-    `• "Show my budgets"\n\n` +
+    `• How much did I spend today / this week / this month?\n` +
+    `• Who owes me money? / What do I owe?\n` +
+    `• Show my budgets\n\n` +
     `*Budgets*\n` +
-    `• "Set budget 3000 for Food"\n` +
-    `• "Set budget 2000 for Transport"\n\n` +
+    `• Set budget 3000 for Food\n` +
+    `• Set budget 2000 for Transport\n\n` +
     `*Commands*\n` +
-    `/summary — This month's full summary\n` +
+    `/summary — Full summary (this month)\n` +
     `/week — This week's spending\n` +
-    `/debts — All pending debts\n` +
-    `/budget — View all budgets & status\n` +
-    `/export — Download this month's expenses as CSV\n` +
-    `/exportdebts — Download all active debts as CSV\n` +
+    `/debts — Outstanding debts\n` +
+    `/budget — Budgets and status\n` +
+    `/export — CSV of this month's expenses\n` +
+    `/exportdebts — CSV of active debts\n` +
     `/help — This message`
   );
 }
@@ -113,13 +113,13 @@ export async function handleExportCommand(ctx) {
   const { csv, filename, count } = await exportTransactionsCSV(user.id, "this_month");
 
   if (count === 0) {
-    return ctx.reply("📭 No transactions this month to export.");
+    return ctx.reply("No transactions this month to export.");
   }
 
   await ctx.replyWithDocument(
     { source: Buffer.from(csv, "utf-8"), filename },
     {
-      caption: `📊 *This Month's Expenses* — ${count} transactions`,
+      caption: `*Expenses (this month)* · ${count} rows`,
       parse_mode: "Markdown",
     }
   );
@@ -133,13 +133,13 @@ export async function handleExportDebtsCommand(ctx) {
   const { csv, filename, count } = await exportDebtsCSV(user.id);
 
   if (count === 0) {
-    return ctx.reply("🎉 No active debts to export.");
+    return ctx.reply("No active debts to export.");
   }
 
   await ctx.replyWithDocument(
     { source: Buffer.from(csv, "utf-8"), filename },
     {
-      caption: `💼 *Active Debts* — ${count} records`,
+      caption: `*Active debts* · ${count} rows`,
       parse_mode: "Markdown",
     }
   );

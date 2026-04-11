@@ -31,7 +31,7 @@ export async function recordDebt(userId, intent, direction) {
  * When a person pays back, we reduce the outstanding lent amount.
  * @param {number} userId
  * @param {string} personName
- * @param {number} amount  - Amount being settled
+ * @param {number|null|undefined} amount  - Amount to settle; null/undefined/0 = settle all open debt with this person
  */
 export async function settleDebt(userId, personName, amount) {
   // Find active (unsettled) debts with this person
@@ -46,21 +46,33 @@ export async function settleDebt(userId, personName, amount) {
 
   if (!debts.length) return { settled: false, message: "No active debt found." };
 
-  let remaining = amount;
+  const numeric =
+    amount == null || amount === "" ? NaN : Number(amount);
+  const fullSettle =
+    amount == null ||
+    amount === "" ||
+    numeric === 0 ||
+    Number.isNaN(numeric);
+
+  let remaining = fullSettle ? Infinity : numeric;
   const updates = [];
+  let totalApplied = 0;
 
   for (const debt of debts) {
-    if (remaining <= 0) break;
+    if (!fullSettle && remaining <= 0) break;
     const debtAbs = Math.abs(Number(debt.amount));
 
-    if (remaining >= debtAbs) {
+    if (fullSettle || remaining >= debtAbs) {
       updates.push(
         prisma.debt.update({
           where: { id: debt.id },
           data: { isSettled: true },
         })
       );
-      remaining -= debtAbs;
+      totalApplied += debtAbs;
+      if (!fullSettle) {
+        remaining -= debtAbs;
+      }
     } else {
       // Partial settlement: reduce the amount
       const newAmount = debt.amount > 0
@@ -72,12 +84,17 @@ export async function settleDebt(userId, personName, amount) {
           data: { amount: newAmount },
         })
       );
+      totalApplied += remaining;
       remaining = 0;
     }
   }
 
+  if (!updates.length) {
+    return { settled: false, message: "Nothing to settle." };
+  }
+
   await prisma.$transaction(updates);
-  return { settled: true, amountSettled: amount };
+  return { settled: true, amountSettled: totalApplied };
 }
 
 /**

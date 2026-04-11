@@ -116,7 +116,17 @@ async function handleSettle(ctx, user, intent) {
     return ctx.reply("Who settled up? Try: 'Rahul paid me back 500'");
   }
 
-  const amount = intent.amount ?? 0;
+  let amount = intent.amount;
+  if (amount != null && amount !== "") {
+    const n = Number(amount);
+    if (Number.isNaN(n) || n < 0) {
+      return ctx.reply(
+        "Use a positive amount (e.g. 'Rushi paid me back 500') or say 'Settle with Rushi' to clear all debt with them."
+      );
+    }
+    amount = n;
+  }
+
   const result = await settleDebt(user.id, intent.person, amount);
 
   if (result.settled) {
@@ -185,18 +195,18 @@ async function handleExport(ctx, user, intent) {
 
   if (wantsDebts) {
     const { csv, filename, count } = await exportDebtsCSV(user.id);
-    if (count === 0) return ctx.reply("🎉 No active debts to export.");
+    if (count === 0) return ctx.reply("No active debts to export.");
     await ctx.replyWithDocument(
       { source: Buffer.from(csv, "utf-8"), filename },
-      { caption: `💼 *Active Debts* — ${count} records`, parse_mode: "Markdown" }
+      { caption: `*Active debts* · ${count} rows`, parse_mode: "Markdown" }
     );
   } else {
     const period = intent.period ?? "this_month";
     const { csv, filename, count } = await exportTransactionsCSV(user.id, period);
-    if (count === 0) return ctx.reply("📭 No transactions found for that period.");
+    if (count === 0) return ctx.reply("No transactions in that period.");
     await ctx.replyWithDocument(
       { source: Buffer.from(csv, "utf-8"), filename },
-      { caption: `📊 *Expenses exported* — ${count} transactions`, parse_mode: "Markdown" }
+      { caption: `*Expenses* · ${count} rows`, parse_mode: "Markdown" }
     );
   }
 }

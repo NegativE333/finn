@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment (secrets)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Prisma
+# Keep migrations; ignore local SQLite if you ever add it
+*.db
+*.db-journal
+
+# Build / coverage
+dist/
+build/
+coverage/
+.nyc_output/

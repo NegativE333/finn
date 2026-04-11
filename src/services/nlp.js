@@ -1,9 +1,11 @@
 // src/services/nlp.js
-// Gemini 1.5 Flash — natural language → structured intent JSON
+// Gemini — natural language → structured intent JSON
+// Model IDs change over time; override with GEMINI_MODEL if Google renames endpoints.
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are a financial intent parser for a personal finance Telegram bot. 
@@ -37,6 +39,7 @@ Examples:
 "Lent 1000 to Rahul for dinner" → {"action":"LENT","amount":1000,"category":null,"note":"dinner","person":"Rahul","period":null,"due_date":null}
 "Borrowed 500 from Amit" → {"action":"BORROWED","amount":500,"category":null,"note":null,"person":"Amit","period":null,"due_date":null}
 "Rahul paid me back 500" → {"action":"SETTLE_DEBT","amount":500,"category":null,"note":null,"person":"Rahul","period":null,"due_date":null}
+"Settle with Rushi" / "Mark settled with Priya" / "All clear with Amit" → SETTLE_DEBT with person set and amount null (means settle every open debt with that person in full)
 "How much did I spend yesterday?" → {"action":"QUERY_EXPENSES","amount":null,"category":null,"note":null,"person":null,"period":"yesterday","due_date":null}
 "Who owes me money?" → {"action":"QUERY_DEBTS","amount":null,"category":null,"note":null,"person":null,"period":null,"due_date":null}
 "Set budget 3000 for food" → {"action":"SET_BUDGET","amount":3000,"category":"Food & Dining","note":null,"person":null,"period":null,"due_date":null}
@@ -53,7 +56,7 @@ Examples:
 export async function parseIntent(message) {
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: GEMINI_MODEL,
       systemInstruction: SYSTEM_PROMPT,
     });
 
