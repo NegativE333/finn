@@ -11,14 +11,15 @@ datasource db {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  telegramId   BigInt        @unique @map("telegram_id")
-  username     String?
-  firstName    String?       @map("first_name")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  transactions Transaction[]
-  debts        Debt[]
-  budgets      Budget[]
+  id             Int             @id @default(autoincrement())
+  telegramId     BigInt          @unique @map("telegram_id")
+  username       String?
+  firstName      String?         @map("first_name")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  transactions   Transaction[]
+  debts          Debt[]
+  budgets        Budget[]
+  scheduledJobs  ScheduledJob[]
 
   @@map("users")
 }
@@ -61,4 +62,29 @@ model Debt {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("debts")
+}
+
+enum JobStatus {
+  pending
+  processing
+  done
+  failed
+}
+
+/// Outbound notification jobs (debt reminders, future: weekly reports). Processed by worker with rate limits.
+model ScheduledJob {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  jobType      String    @map("job_type")
+  scheduledFor DateTime  @map("scheduled_for")
+  status       JobStatus @default(pending)
+  attempts     Int       @default(0)
+  lastError    String?   @map("last_error") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([userId, jobType, status])
+  @@map("scheduled_jobs")
 }

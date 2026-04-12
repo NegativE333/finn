@@ -1,45 +1,40 @@
 // src/services/scheduler.js
-// Proactive daily reminders for outstanding debts
+// Daily morning enqueue + Postgres-backed worker (yesterday spending digest).
 
 import cron from "node-cron";
-import { getAllUsersWithPendingDebts } from "./debtService.js";
-import { debtReminder } from "../utils/formatter.js";
+import { enqueueYesterdayDigestJobs, runReminderWorkerTick } from "./reminderQueue.js";
+
+const WORKER_INTERVAL_MS = 10_000;
 
 /**
- * Starts the cron scheduler on the given Telegram bot instance.
+ * Morning cron enqueues “yesterday spending” digests; worker sends with rate limits + retries.
  * @param {import('telegraf').Telegraf} bot
  */
 export function startScheduler(bot) {
-  // Runs every day at 9:00 AM IST (UTC+5:30 = 03:30 UTC)
-  cron.schedule("30 3 * * *", async () => {
-    console.log("[CRON] Running daily debt reminder...");
-
+  // TEST: 11:57 local server time daily — revert to e.g. "30 3 * * *" for 09:00 IST (UTC)
+  cron.schedule("39 12 * * *", async () => {
+    console.log("[CRON] Enqueue morning yesterday spending digests...");
     try {
-      const usersWithDebts = await getAllUsersWithPendingDebts();
-
-      for (const { user, debts } of usersWithDebts) {
-        const lentDebts = debts.filter((d) => d.amount > 0);
-        const borrowedDebts = debts.filter((d) => d.amount < 0);
-
-        if (lentDebts.length === 0 && borrowedDebts.length === 0) continue;
-
-        try {
-          await bot.telegram.sendMessage(
-            user.telegramId.toString(),
-            debtReminder(lentDebts, borrowedDebts),
-            { parse_mode: "Markdown" }
-          );
-        } catch (sendErr) {
-          // User may have blocked the bot — log and continue
-          console.warn(`[CRON] Could not send to user ${user.telegramId}:`, sendErr.message);
-        }
-      }
-
-      console.log(`[CRON] Reminders sent to ${usersWithDebts.length} user(s).`);
+      const { enqueued, users } = await enqueueYesterdayDigestJobs();
+      console.log(`[CRON] Enqueued ${enqueued} digest job(s) for ${users} user(s).`);
     } catch (err) {
-      console.error("[CRON] Scheduler error:", err);
+      console.error("[CRON] Enqueue failed:", err);
     }
   });
 
-  console.log("[CRON] Daily debt reminder scheduled at 09:00 IST.");
+  setInterval(() => {
+    runReminderWorkerTick(bot).catch((err) =>
+      console.error("[QUEUE] Worker tick failed:", err)
+    );
+  }, WORKER_INTERVAL_MS);
+
+  setTimeout(() => {
+    runReminderWorkerTick(bot).catch((err) =>
+      console.error("[QUEUE] Initial worker tick failed:", err)
+    );
+  }, 3000);
+
+  console.log(
+    `[CRON] Morning digest: daily enqueue 11:57 (test — server local TZ); worker every ${WORKER_INTERVAL_MS / 1000}s.`
+  );
 }

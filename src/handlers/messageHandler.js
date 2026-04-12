@@ -146,18 +146,53 @@ async function handleQueryExpenses(ctx, user, intent) {
     intent.category && String(intent.category).trim()
       ? String(intent.category).trim()
       : null;
+  const noteSearch =
+    intent.note && String(intent.note).trim()
+      ? String(intent.note).trim()
+      : null;
+
+  const filterOpts = {};
+  if (category) filterOpts.category = category;
+  if (noteSearch) filterOpts.noteContains = noteSearch;
+
+  const narrowFilter = Boolean(category || noteSearch);
 
   const [totalData, fullBreakdown] = await Promise.all([
-    getTotalForPeriod(user.id, period, { category }),
-    category ? Promise.resolve(null) : getCategoryBreakdown(user.id, period),
+    getTotalForPeriod(user.id, period, filterOpts),
+    narrowFilter ? Promise.resolve(null) : getCategoryBreakdown(user.id, period),
   ]);
 
-  const breakdown =
-    category != null
-      ? totalData.total > 0
+  let breakdown;
+  if (category && noteSearch) {
+    breakdown =
+      totalData.total > 0
+        ? [
+            {
+              category: `${category} · "${noteSearch}"`,
+              total: totalData.total,
+              count: totalData.count,
+            },
+          ]
+        : [];
+  } else if (category != null) {
+    breakdown =
+      totalData.total > 0
         ? [{ category, total: totalData.total, count: totalData.count }]
-        : []
-      : fullBreakdown;
+        : [];
+  } else if (noteSearch != null) {
+    breakdown =
+      totalData.total > 0
+        ? [
+            {
+              category: `Notes matching "${noteSearch}"`,
+              total: totalData.total,
+              count: totalData.count,
+            },
+          ]
+        : [];
+  } else {
+    breakdown = fullBreakdown;
+  }
 
   await ctx.replyWithMarkdown(expenseSummary(totalData, breakdown));
 }

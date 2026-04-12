@@ -1,7 +1,7 @@
 // src/utils/formatter.js
 // User-facing message copy — clear structure, minimal decoration.
 
-import { periodLabel, formatDate } from "./dateUtils.js";
+import { periodLabel, formatDate, getPeriodRange } from "./dateUtils.js";
 
 const RUPEE = "₹";
 
@@ -17,13 +17,31 @@ function statusLabel(s) {
 
 // ── Expense confirmations ─────────────────────────────────────────────────────
 
+/**
+ * @param {{ amount: unknown, category: string, note?: string | null }} transaction
+ * @param {number} monthlyTotal
+ */
+function sameLocalCalendarDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 export function expenseLogged(transaction, monthlyTotal) {
-  const lines = [
-    `*Expense recorded*`,
-    `${fmt(transaction.amount)} · ${transaction.category}`,
-  ];
+  const amt = fmt(Number(transaction.amount));
+  const cat = transaction.category;
+
+  const lines = [`Got it — *${amt}* · ${cat}`];
+  if (transaction.timestamp) {
+    const ts = new Date(transaction.timestamp);
+    if (!sameLocalCalendarDay(ts, new Date())) {
+      lines.push(`_Booked for ${formatDate(ts)}_`);
+    }
+  }
   if (transaction.note) lines.push(`_${transaction.note}_`);
-  lines.push(`Month to date: *${fmt(monthlyTotal)}*`);
+  lines.push("", `You're at *${fmt(monthlyTotal)}* spent this month.`);
   return lines.join("\n");
 }
 
@@ -63,6 +81,58 @@ export function expenseSummary(data, breakdown) {
       (b) => `• ${b.category}: *${fmt(b.total)}* (${b.count} transactions)`
     ),
   ];
+  return lines.join("\n");
+}
+
+/** Telegram Markdown–safe display name for greetings (first name, else username without @). */
+function safeDisplayName(firstName, username) {
+  const raw =
+    (firstName && String(firstName).trim()) ||
+    (username && String(username).replace(/^@/, "").trim()) ||
+    "";
+  if (!raw) return null;
+  const cleaned = raw.replace(/[*_`[\]]/g, "").trim().slice(0, 40);
+  return cleaned || null;
+}
+
+/**
+ * Scheduled morning digest: yesterday’s spending.
+ * @param {{ total: number, count: number, period: string }} data
+ * @param {Array<{ category: string, total: number, count: number }>} breakdown
+ * @param {{ firstName?: string | null, username?: string | null }} [user]
+ */
+export function morningYesterdayDigest(data, breakdown, user = {}) {
+  const { start } = getPeriodRange("yesterday");
+  const dayLine = formatDate(start);
+
+  const name = safeDisplayName(user.firstName, user.username);
+  const greeting = name ? `Good morning, *${name}*` : `Good morning`;
+  const headline = `Here's what you spent *yesterday*`;
+
+  if (data.total === 0) {
+    return (
+      `${greeting}\n\n${headline}\n\n` +
+      `You didn't log any expenses that day. If something's missing, just tell me — e.g. _Spent 150 on chai_.`
+    );
+  }
+
+  const txnWord = data.count === 1 ? "transaction" : "transactions";
+  const lines = [
+    greeting,
+    "",
+    headline,
+    "",
+    `All in, you spent *${fmt(data.total)}* across *${breakdown.length}* categories (${data.count} ${txnWord}).`,
+    "",
+    `*Where it went*`,
+    ...breakdown.map(
+      (b) =>
+        `• ${b.category} — *${fmt(b.total)}* (${b.count} ${b.count === 1 ? "txn" : "txns"})`
+    ),
+    "",
+    `_Message me anytime to log or ask — I've got you._`,
+  ];
+
   return lines.join("\n");
 }
 
@@ -124,30 +194,6 @@ export function monthlySummary(period, totalData, breakdown, lentDebts, borrowed
     if (totalBorrowed > 0) lines.push(`  You owe: ${fmt(totalBorrowed)}`);
   }
 
-  return lines.join("\n");
-}
-
-// ── Proactive reminder ────────────────────────────────────────────────────────
-
-export function debtReminder(lentDebts, borrowedDebts) {
-  const lines = [`*Debt reminder*`, ``];
-
-  if (lentDebts.length > 0) {
-    lines.push(`*Outstanding receivables*`);
-    lentDebts.forEach((d) => {
-      lines.push(`  • ${d.personName}: ${fmt(d.amount)}`);
-    });
-  }
-
-  if (borrowedDebts.length > 0) {
-    if (lentDebts.length > 0) lines.push("");
-    lines.push(`*Amounts you owe*`);
-    borrowedDebts.forEach((d) => {
-      lines.push(`  • ${d.personName}: ${fmt(Math.abs(d.amount))}`);
-    });
-  }
-
-  lines.push(``, `When something is paid, reply e.g. "Rahul paid me back 500" or "Settle with Rahul".`);
   return lines.join("\n");
 }
 
