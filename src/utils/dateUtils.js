@@ -61,8 +61,18 @@ export function getPeriodRange(period) {
     }
 
     case "all":
-    default:
       return { start: new Date(0), end: new Date() };
+
+    default: {
+      const match = typeof period === "string" && /^last_(\d+)_days$/.exec(period);
+      if (match) {
+        const days = parseInt(match[1], 10);
+        const start = new Date(now);
+        start.setDate(now.getDate() - days);
+        return { start: startOfDay(start), end: endOfDay(now) };
+      }
+      return { start: new Date(0), end: new Date() };
+    }
   }
 }
 
@@ -71,6 +81,10 @@ export function getPeriodRange(period) {
  * @param {string} period
  */
 export function periodLabel(period) {
+  if (typeof period === "string") {
+    const m = /^last_(\d+)_days$/.exec(period);
+    if (m) return `Last ${m[1]} days`;
+  }
   const map = {
     today: "Today",
     yesterday: "Yesterday",

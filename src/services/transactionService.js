@@ -23,13 +23,19 @@ export async function logExpense(userId, intent) {
 /**
  * Get total spending for a given period.
  * @param {number} userId
- * @param {string} period  - e.g. "today", "this_month"
+ * @param {string} period  - e.g. "today", "this_month", "last_7_days"
+ * @param {{ category?: string }} [options]  - optional exact category filter
  */
-export async function getTotalForPeriod(userId, period = "this_month") {
+export async function getTotalForPeriod(userId, period = "this_month", options = {}) {
   const { start, end } = getPeriodRange(period);
 
+  const where = { userId, timestamp: { gte: start, lte: end } };
+  if (options.category) {
+    where.category = { equals: options.category, mode: "insensitive" };
+  }
+
   const result = await prisma.transaction.aggregate({
-    where: { userId, timestamp: { gte: start, lte: end } },
+    where,
     _sum: { amount: true },
     _count: true,
   });

@@ -9,6 +9,7 @@ import {
   settleDebt,
   getLentDebts,
   getBorrowedDebts,
+  getDebtsByPerson,
 } from "../services/debtService.js";
 import { setBudget, getBudgetStatus, checkBudgetAlerts } from "../services/budgetService.js";
 import { exportTransactionsCSV, exportDebtsCSV } from "../services/exportService.js";
@@ -26,6 +27,7 @@ import {
   undoDebtKeyboard,
   UNKNOWN_MSG,
   ERROR_MSG,
+  fmt,
 } from "../utils/formatter.js";
 
 /**
@@ -56,6 +58,8 @@ export async function handleMessage(ctx) {
         return await handleQueryExpenses(ctx, user, intent);
       case "QUERY_DEBTS":
         return await handleQueryDebts(ctx, user);
+      case "QUERY_PERSON_DEBT":
+        return await handleQueryPersonDebt(ctx, user, intent);
       case "SUMMARY":
         return await handleSummary(ctx, user, intent);
       case "SET_BUDGET":
@@ -138,10 +142,23 @@ async function handleSettle(ctx, user, intent) {
 
 async function handleQueryExpenses(ctx, user, intent) {
   const period = intent.period ?? "this_month";
-  const [totalData, breakdown] = await Promise.all([
-    getTotalForPeriod(user.id, period),
-    getCategoryBreakdown(user.id, period),
+  const category =
+    intent.category && String(intent.category).trim()
+      ? String(intent.category).trim()
+      : null;
+
+  const [totalData, fullBreakdown] = await Promise.all([
+    getTotalForPeriod(user.id, period, { category }),
+    category ? Promise.resolve(null) : getCategoryBreakdown(user.id, period),
   ]);
+
+  const breakdown =
+    category != null
+      ? totalData.total > 0
+        ? [{ category, total: totalData.total, count: totalData.count }]
+        : []
+      : fullBreakdown;
+
   await ctx.replyWithMarkdown(expenseSummary(totalData, breakdown));
 }
 
@@ -151,6 +168,28 @@ async function handleQueryDebts(ctx, user) {
     getBorrowedDebts(user.id),
   ]);
   await ctx.replyWithMarkdown(debtList(lent, borrowed));
+}
+
+async function handleQueryPersonDebt(ctx, user, intent) {
+  if (!intent.person) {
+    return handleQueryDebts(ctx, user);
+  }
+
+  const debts = await getDebtsByPerson(user.id, intent.person);
+  if (!debts.length) {
+    return ctx.reply(`No active debts with ${intent.person}.`);
+  }
+
+  const total = debts.reduce((s, d) => s + Number(d.amount), 0);
+  const name = intent.person;
+  const line =
+    total > 0
+      ? `${name} owes you *${fmt(total)}*`
+      : total < 0
+        ? `You owe ${name} *${fmt(Math.abs(total))}*`
+        : `No net balance with ${name}.`;
+
+  await ctx.replyWithMarkdown(line);
 }
 
 async function handleSummary(ctx, user, intent) {
