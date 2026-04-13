@@ -103,10 +103,22 @@ async function launch() {
         domain: webhookDomain,
         host: "0.0.0.0",
         port,
+        cb: (req, res) => {
+          const pathOnly = (req.url ?? "").split("?")[0];
+          if (req.method === "GET" && pathOnly === "/health") {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({ status: "ok", uptime: process.uptime() })
+            );
+            return;
+          }
+          res.writeHead(404);
+          res.end();
+        },
       },
     });
 
-    console.log(`Finn webhook listening on 0.0.0.0:${port}`);
+    console.log(`Finn webhook + GET /health on 0.0.0.0:${port}`);
     try {
       const wh = await bot.telegram.getWebhookInfo();
       if (wh.url) console.log(`Webhook (from Telegram): ${wh.url}`);

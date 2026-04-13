@@ -22,7 +22,7 @@ Production: set `NODE_ENV=production` and `WEBHOOK_DOMAIN` to your public URL; s
 
 ## Deploy (e.g. Render)
 
-- **Start command:** `npm run db:migrate && npm start`
+- **Start command:** `npx prisma migrate deploy && npm start` (or `npm run db:migrate && npm start`)
 - Add the same variables as in `.env.example`.
 
 ## Usage
