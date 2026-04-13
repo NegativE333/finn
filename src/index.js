@@ -97,24 +97,34 @@ async function launch() {
       process.env.PORT ?? process.env.WEBHOOK_PORT ?? "3000",
       10
     );
-    const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 
     await bot.launch({
       webhook: {
         domain: webhookDomain,
-        path: webhookPath,
+        host: "0.0.0.0",
         port,
       },
     });
 
-    console.log(`Finn webhook listening on port ${port}`);
-    console.log(`Webhook: ${webhookDomain}${webhookPath}`);
+    console.log(`Finn webhook listening on 0.0.0.0:${port}`);
+    try {
+      const wh = await bot.telegram.getWebhookInfo();
+      if (wh.url) console.log(`Webhook (from Telegram): ${wh.url}`);
+    } catch (e) {
+      console.warn("Could not fetch webhook info:", e.message);
+    }
     startScheduler(bot);
     console.log("Finn is online.\n");
   } else {
     // Long-polling: Telegraf awaits an infinite getUpdates loop, so code after
     // bot.launch() would never run. Scheduler + logs must come first.
-    console.log("Finn long-polling (dev)");
+    if (isProduction && !webhookDomain) {
+      console.warn(
+        "Finn long-polling — WEBHOOK_DOMAIN is not set; Telegram webhooks are disabled."
+      );
+    } else {
+      console.log("Finn long-polling (local dev)");
+    }
     startScheduler(bot);
     console.log("Finn is online.\n");
     await bot.launch();
