@@ -92,8 +92,11 @@ async function launch() {
   );
 
   if (useWebhook) {
-    // Webhook mode — used on Render / any hosted environment
-    const port = parseInt(process.env.WEBHOOK_PORT ?? "3000", 10);
+
+    const port = parseInt(
+      process.env.PORT ?? process.env.WEBHOOK_PORT ?? "3000",
+      10
+    );
     const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 
     await bot.launch({

@@ -1,0 +1,25 @@
+# Render Blueprint — https://render.com/docs/infrastructure-as-code
+# Usage: connect this repo in the Render dashboard → New → Blueprint, or add manually.
+
+services:
+  - type: web
+    name: finngobot
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx prisma migrate deploy && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set these in the dashboard (or link a Render Postgres and map DATABASE_URL / DIRECT_URL)
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: WEBHOOK_DOMAIN
+        sync: false
