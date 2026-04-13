@@ -11,16 +11,19 @@ const WORKER_INTERVAL_MS = 10_000;
  * @param {import('telegraf').Telegraf} bot
  */
 export function startScheduler(bot) {
-  // TEST: 11:57 local server time daily — revert to e.g. "30 3 * * *" for 09:00 IST (UTC)
-  cron.schedule("39 12 * * *", async () => {
-    console.log("[CRON] Enqueue morning yesterday spending digests...");
-    try {
-      const { enqueued, users } = await enqueueYesterdayDigestJobs();
-      console.log(`[CRON] Enqueued ${enqueued} digest job(s) for ${users} user(s).`);
-    } catch (err) {
-      console.error("[CRON] Enqueue failed:", err);
-    }
-  });
+  cron.schedule(
+    "0 0 * * *",
+    async () => {
+      console.log("[CRON] Enqueue morning yesterday spending digests...");
+      try {
+        const { enqueued, users } = await enqueueYesterdayDigestJobs();
+        console.log(`[CRON] Enqueued ${enqueued} digest job(s) for ${users} user(s).`);
+      } catch (err) {
+        console.error("[CRON] Enqueue failed:", err);
+      }
+    },
+    { timezone: "Etc/UTC" }
+  );
 
   setInterval(() => {
     runReminderWorkerTick(bot).catch((err) =>
@@ -35,6 +38,6 @@ export function startScheduler(bot) {
   }, 3000);
 
   console.log(
-    `[CRON] Morning digest: daily enqueue 11:57 (test — server local TZ); worker every ${WORKER_INTERVAL_MS / 1000}s.`
+    `[CRON] Morning digest: enqueue daily at 00:00 UTC (05:30 IST); worker every ${WORKER_INTERVAL_MS / 1000}s.`
   );
 }
