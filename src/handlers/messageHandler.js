@@ -13,7 +13,11 @@ import {
 } from "../services/debtService.js";
 import { setBudget, getBudgetStatus, checkBudgetAlerts } from "../services/budgetService.js";
 import { exportTransactionsCSV, exportDebtsCSV } from "../services/exportService.js";
-import { MAX_USER_MESSAGE_CHARS } from "../constants/limits.js";
+import {
+  MAX_USER_MESSAGE_CHARS,
+  NLP_SLOW_NOTICE_AFTER_MS,
+  NLP_TYPING_KEEPALIVE_MS,
+} from "../constants/limits.js";
 import {
   expenseLogged,
   debtLogged,
@@ -52,16 +56,62 @@ export async function handleMessage(ctx) {
   await ctx.sendChatAction("typing");
 
   try {
-    // Run DB upsert and NLP in parallel so Groq starts immediately (typing is not burned on DB alone).
-    const [user, intent] = await Promise.all([
-      upsertUser(ctx),
-      parseIntent(text, {
-        onFirstRetryNotify: async () => {
-          await ctx.sendChatAction("typing");
-          await ctx.reply(NLP_RETRY_NOTICE_MSG);
-        },
-      }),
-    ]);
+    const user = await upsertUser(ctx);
+    await ctx.sendChatAction("typing");
+
+    const chatId = ctx.chat?.id;
+    const replyToId = ctx.message?.message_id;
+
+    let userWaitNotified = false;
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let slowNoticeTimer = null;
+    /** @type {ReturnType<typeof setInterval> | null} */
+    let typingKeepAlive = null;
+
+    const notifyWaitOnce = async (reason) => {
+      if (userWaitNotified || chatId == null) return;
+      userWaitNotified = true;
+      if (slowNoticeTimer != null) {
+        clearTimeout(slowNoticeTimer);
+        slowNoticeTimer = null;
+      }
+      try {
+        await ctx.telegram.sendChatAction(chatId, "typing");
+        await ctx.telegram.sendMessage(chatId, NLP_RETRY_NOTICE_MSG, {
+          ...(replyToId != null ? { reply_to_message_id: replyToId } : {}),
+        });
+        console.log(`[MSG] User wait notice (${reason})`);
+      } catch (e) {
+        console.warn("[MSG] wait notice failed:", e?.message ?? e);
+      }
+    };
+
+    let intent;
+    try {
+      if (chatId != null) {
+        typingKeepAlive = setInterval(() => {
+          ctx.telegram.sendChatAction(chatId, "typing").catch(() => {});
+        }, NLP_TYPING_KEEPALIVE_MS);
+      }
+      slowNoticeTimer = setTimeout(() => {
+        slowNoticeTimer = null;
+        void notifyWaitOnce("slow-first-response");
+      }, NLP_SLOW_NOTICE_AFTER_MS);
+
+      intent = await parseIntent(text, {
+        onFirstRetryNotify: () => notifyWaitOnce("nlp-retry"),
+      });
+    } finally {
+      if (slowNoticeTimer != null) {
+        clearTimeout(slowNoticeTimer);
+        slowNoticeTimer = null;
+      }
+      if (typingKeepAlive != null) {
+        clearInterval(typingKeepAlive);
+        typingKeepAlive = null;
+      }
+    }
+
     console.log(`[MSG] User ${user.telegramId} | Intent: ${intent.action}`, intent);
 
     switch (intent.action) {

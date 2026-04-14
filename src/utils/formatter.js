@@ -277,7 +277,7 @@ export const UNKNOWN_MSG =
 export const ERROR_MSG =
   `Something went wrong. Please try again in a moment.`;
 
-/** Shown once when the first parse attempt fails but we are retrying (e.g. rate limit / overload). */
+/** Shown at most once: slow first NLP response (~3s+) or first failed attempt before retry. */
 export const NLP_RETRY_NOTICE_MSG =
   `That's taking a moment — I'm still working on what you sent and I'll reply right here when it's ready. Please wait; no need to send it again.`;
 
