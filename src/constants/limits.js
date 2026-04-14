@@ -20,3 +20,9 @@ export const NLP_SLOW_NOTICE_AFTER_MS = 3200;
 
 /** Refresh Telegram “typing” while waiting on NLP (indicator expires ~5s). */
 export const NLP_TYPING_KEEPALIVE_MS = 4000;
+
+/** In-memory rate limit: max text messages per user per window (spam / cost). */
+export const RATE_LIMIT_WINDOW_MS = 60_000;
+
+/** 6th message in the same minute crosses this (with async dispatch, the warning shows right away). */
+export const RATE_LIMIT_MAX_MESSAGES = 10;

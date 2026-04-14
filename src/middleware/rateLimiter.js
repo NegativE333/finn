@@ -1,8 +1,7 @@
 // src/middleware/rateLimiter.js
 // Simple in-memory rate limiter: max N messages per user per window
 
-const WINDOW_MS = 60_000; // 1 minute
-const MAX_REQUESTS = 5;  // messages per window per user
+import { RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_MESSAGES } from "../constants/limits.js";
 
 /** @type {Map<string, { count: number, resetAt: number }>} */
 const store = new Map();
@@ -30,15 +29,15 @@ export async function rateLimiter(ctx, next) {
   const entry = store.get(key);
 
   if (!entry || entry.resetAt <= now) {
-    store.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    store.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return next();
   }
 
   entry.count += 1;
 
-  if (entry.count > MAX_REQUESTS) {
+  if (entry.count > RATE_LIMIT_MAX_MESSAGES) {
     // Only warn once per window (at the exact threshold crossing)
-    if (entry.count === MAX_REQUESTS + 1) {
+    if (entry.count === RATE_LIMIT_MAX_MESSAGES + 1) {
       await ctx.reply(
         "You're sending messages too quickly. Please wait a moment."
       );

@@ -12,6 +12,7 @@ import { startScheduler } from "./services/scheduler.js";
 import { rateLimiter } from "./middleware/rateLimiter.js";
 import { sessionMiddleware } from "./middleware/session.js";
 import { handleMessage } from "./handlers/messageHandler.js";
+import { ERROR_MSG } from "./utils/formatter.js";
 import { registerCallbacks } from "./handlers/callbackHandler.js";
 import {
   handleStart,
@@ -66,7 +67,14 @@ bot.command("exportdebts", handleExportDebtsCommand);
 registerCallbacks(bot);
 
 // ── Natural language message handler ─────────────────────────────────────────
-bot.on(message("text"), handleMessage);
+
+function dispatchTextMessage(ctx) {
+  void handleMessage(ctx).catch((err) => {
+    console.error("[MSG] Async text handler failed:", err);
+    ctx.reply(ERROR_MSG).catch(() => {});
+  });
+}
+bot.on(message("text"), dispatchTextMessage);
 
 // ── Global error boundary ─────────────────────────────────────────────────────
 bot.catch((err, ctx) => {
