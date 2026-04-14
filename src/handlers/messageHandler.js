@@ -28,6 +28,7 @@ import {
   undoDebtKeyboard,
   UNKNOWN_MSG,
   ERROR_MSG,
+  NLP_RETRY_NOTICE_MSG,
   messageTooLongRejection,
   fmt,
 } from "../utils/formatter.js";
@@ -52,7 +53,11 @@ export async function handleMessage(ctx) {
 
   try {
     const user = await upsertUser(ctx);
-    const intent = await parseIntent(text);
+    const intent = await parseIntent(text, {
+      onFirstRetryNotify: async () => {
+        await ctx.reply(NLP_RETRY_NOTICE_MSG);
+      },
+    });
     console.log(`[MSG] User ${user.telegramId} | Intent: ${intent.action}`, intent);
 
     switch (intent.action) {

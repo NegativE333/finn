@@ -2,6 +2,7 @@
 // Groq (OpenAI-compatible) — natural language → structured intent JSON
 
 import Groq from "groq-sdk";
+import { withNlpRetries } from "../utils/nlpRetry.js";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant";
@@ -117,19 +118,24 @@ function sanitizeIntent(intent, rawMessage) {
 /**
  * Parse a raw user message into a structured intent object.
  * @param {string} message - Raw Telegram message text
+ * @param {{ onFirstRetryNotify?: () => Promise<void> }} [opts] - e.g. Telegram "please wait" after first NLP failure
  * @returns {Promise<object>} Parsed intent
  */
-export async function parseIntent(message) {
+export async function parseIntent(message, opts = {}) {
   try {
-    const completion = await groq.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: message },
-      ],
-      temperature: 0,
-      response_format: { type: "json_object" },
-    });
+    const completion = await withNlpRetries(
+      () =>
+        groq.chat.completions.create({
+          model: GROQ_MODEL,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: message },
+          ],
+          temperature: 0,
+          response_format: { type: "json_object" },
+        }),
+      { label: "NLP", onFirstRetryNotify: opts.onFirstRetryNotify }
+    );
 
     const raw = completion.choices[0]?.message?.content?.trim();
     if (!raw) {

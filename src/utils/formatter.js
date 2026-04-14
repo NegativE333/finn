@@ -277,6 +277,10 @@ export const UNKNOWN_MSG =
 export const ERROR_MSG =
   `Something went wrong. Please try again in a moment.`;
 
+/** Shown once when the first parse attempt fails but we are retrying (e.g. rate limit / overload). */
+export const NLP_RETRY_NOTICE_MSG =
+  `That's taking a moment — I'm still working on what you sent and I'll reply right here when it's ready. Please wait; no need to send it again.`;
+
 /** Rejection when text exceeds the configured max length (no NLP call). */
 export function messageTooLongRejection(maxChars) {
   return (
