@@ -2,7 +2,7 @@
 // Simple in-memory rate limiter: max N messages per user per window
 
 const WINDOW_MS = 60_000; // 1 minute
-const MAX_REQUESTS = 20;  // messages per window per user
+const MAX_REQUESTS = 5;  // messages per window per user
 
 /** @type {Map<string, { count: number, resetAt: number }>} */
 const store = new Map();
