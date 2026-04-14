@@ -99,13 +99,6 @@ export async function withNlpRetries(operation, options = {}) {
       if (attempt === NLP_MAX_ATTEMPTS - 1) {
         throw err;
       }
-      const wait = backoffMs(attempt);
-      const status = getHttpStatus(err);
-      console.warn(
-        `[${label}] attempt ${attempt + 1}/${NLP_MAX_ATTEMPTS} failed` +
-          (status != null ? ` (HTTP ${status})` : "") +
-          `: ${err && typeof err === "object" && "message" in err ? /** @type {any} */ (err).message : String(err)} — retry in ${wait}ms`
-      );
       if (attempt === 0 && typeof onFirstRetryNotify === "function") {
         try {
           await onFirstRetryNotify();
@@ -113,6 +106,13 @@ export async function withNlpRetries(operation, options = {}) {
           console.warn(`[${label}] onFirstRetryNotify failed:`, /** @type {any} */ (notifyErr)?.message);
         }
       }
+      const wait = backoffMs(attempt);
+      const status = getHttpStatus(err);
+      console.warn(
+        `[${label}] attempt ${attempt + 1}/${NLP_MAX_ATTEMPTS} failed` +
+          (status != null ? ` (HTTP ${status})` : "") +
+          `: ${err && typeof err === "object" && "message" in err ? /** @type {any} */ (err).message : String(err)} — retry in ${wait}ms`
+      );
       await sleep(wait);
     }
   }

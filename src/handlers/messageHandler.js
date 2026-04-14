@@ -52,12 +52,16 @@ export async function handleMessage(ctx) {
   await ctx.sendChatAction("typing");
 
   try {
-    const user = await upsertUser(ctx);
-    const intent = await parseIntent(text, {
-      onFirstRetryNotify: async () => {
-        await ctx.reply(NLP_RETRY_NOTICE_MSG);
-      },
-    });
+    // Run DB upsert and NLP in parallel so Groq starts immediately (typing is not burned on DB alone).
+    const [user, intent] = await Promise.all([
+      upsertUser(ctx),
+      parseIntent(text, {
+        onFirstRetryNotify: async () => {
+          await ctx.sendChatAction("typing");
+          await ctx.reply(NLP_RETRY_NOTICE_MSG);
+        },
+      }),
+    ]);
     console.log(`[MSG] User ${user.telegramId} | Intent: ${intent.action}`, intent);
 
     switch (intent.action) {
