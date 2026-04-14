@@ -276,3 +276,11 @@ export const UNKNOWN_MSG =
 
 export const ERROR_MSG =
   `Something went wrong. Please try again in a moment.`;
+
+/** Rejection when text exceeds the configured max length (no NLP call). */
+export function messageTooLongRejection(maxChars) {
+  return (
+    `That message is too long (max ${maxChars} characters). ` +
+    `Please shorten it and try again.`
+  );
+}

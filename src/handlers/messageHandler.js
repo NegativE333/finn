@@ -13,6 +13,7 @@ import {
 } from "../services/debtService.js";
 import { setBudget, getBudgetStatus, checkBudgetAlerts } from "../services/budgetService.js";
 import { exportTransactionsCSV, exportDebtsCSV } from "../services/exportService.js";
+import { MAX_USER_MESSAGE_CHARS } from "../constants/limits.js";
 import {
   expenseLogged,
   debtLogged,
@@ -27,6 +28,7 @@ import {
   undoDebtKeyboard,
   UNKNOWN_MSG,
   ERROR_MSG,
+  messageTooLongRejection,
   fmt,
 } from "../utils/formatter.js";
 
@@ -37,6 +39,14 @@ import {
 export async function handleMessage(ctx) {
   const text = ctx.message?.text;
   if (!text || text.startsWith("/")) return;
+
+  const limit = MAX_USER_MESSAGE_CHARS;
+  if (text.length > limit) {
+    console.warn(
+      `[MSG] Rejected oversize message (${text.length} chars > ${limit}) from ${ctx.from?.id}`
+    );
+    return ctx.reply(messageTooLongRejection(limit));
+  }
 
   await ctx.sendChatAction("typing");
 
