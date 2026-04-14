@@ -281,6 +281,33 @@ export const ERROR_MSG =
 export const NLP_RETRY_NOTICE_MSG =
   `That's taking a moment — I'm still working on what you sent and I'll reply right here when it's ready. Please wait; no need to send it again.`;
 
+export const SALARY_NUDGE_EXPENSE_MSG =
+  `By the way — if you tell me your monthly salary, I can show you how much of it you've spent so far. Just say something like 'my salary is 85000 credited on the 5th' anytime.`;
+
+export const SALARY_NUDGE_SUMMARY_MSG =
+  `Add your salary to see your savings rate and how much is left for the month.`;
+
+export const SALARY_NUDGE_MONTH_START_MSG =
+  `New month! You haven't set up your salary yet — tell me your monthly income and I'll track your savings automatically.`;
+
+function dayOrdinal(day) {
+  const d = Number(day);
+  if (d % 100 >= 11 && d % 100 <= 13) return `${d}th`;
+  const last = d % 10;
+  if (last === 1) return `${d}st`;
+  if (last === 2) return `${d}nd`;
+  if (last === 3) return `${d}rd`;
+  return `${d}th`;
+}
+
+export function salarySetConfirmation(amount, creditDay) {
+  return `Got it. I'll auto-log *${fmt(amount)}* on the *${dayOrdinal(
+    creditDay
+  )}* every month and track your monthly savings.`;
+}
+
+export const SALARY_DAY_MISSING_MSG = `What date does it get credited?`;
+
 /** Rejection when text exceeds the configured max length (no NLP call). */
 export function messageTooLongRejection(maxChars) {
   return (

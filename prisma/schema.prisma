@@ -15,6 +15,10 @@ model User {
   telegramId     BigInt          @unique @map("telegram_id")
   username       String?
   firstName      String?         @map("first_name")
+  monthlySalary  Decimal?        @map("monthly_salary") @db.Decimal(12, 2)
+  salaryCreditDay Int?           @map("salary_credit_day")
+  nudgesShown    Json            @default("{}") @map("nudges_shown")
+  lastNudgeAt    DateTime?       @map("last_nudge_at")
   createdAt      DateTime        @default(now()) @map("created_at")
   transactions   Transaction[]
   debts          Debt[]

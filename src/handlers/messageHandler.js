@@ -14,6 +14,11 @@ import {
 import { setBudget, getBudgetStatus, checkBudgetAlerts } from "../services/budgetService.js";
 import { exportTransactionsCSV, exportDebtsCSV } from "../services/exportService.js";
 import {
+  maybeSendSalaryNudgeInChat,
+  SALARY_NUDGE_TRIGGERS,
+  setSalaryConfig,
+} from "../services/salaryService.js";
+import {
   MAX_USER_MESSAGE_CHARS,
   NLP_SLOW_NOTICE_AFTER_MS,
   NLP_TYPING_KEEPALIVE_MS,
@@ -33,9 +38,21 @@ import {
   UNKNOWN_MSG,
   ERROR_MSG,
   NLP_RETRY_NOTICE_MSG,
+  SALARY_NUDGE_EXPENSE_MSG,
+  SALARY_NUDGE_SUMMARY_MSG,
+  SALARY_DAY_MISSING_MSG,
+  salarySetConfirmation,
   messageTooLongRejection,
   fmt,
 } from "../utils/formatter.js";
+
+async function sendSalaryNudgeSafe(ctx, user, trigger, text) {
+  try {
+    await maybeSendSalaryNudgeInChat(ctx, user, trigger, text);
+  } catch (err) {
+    console.warn("[MSG] Salary nudge failed:", err?.message ?? err);
+  }
+}
 
 /**
  * Main message handler. Called for every text message the bot receives.
@@ -57,6 +74,18 @@ export async function handleMessage(ctx) {
 
   try {
     const user = await upsertUser(ctx);
+
+    const pendingSalaryAmount = Number(ctx.session?.pendingSalaryAmount ?? 0);
+    const dayFromFollowUp = parseSalaryDayInput(text);
+    if (pendingSalaryAmount > 0 && dayFromFollowUp != null) {
+      const updated = await setSalaryConfig(user.id, pendingSalaryAmount, dayFromFollowUp);
+      if (ctx.session) delete ctx.session.pendingSalaryAmount;
+      await ctx.replyWithMarkdown(
+        salarySetConfirmation(Number(updated.monthlySalary), updated.salaryCreditDay)
+      );
+      return;
+    }
+
     await ctx.sendChatAction("typing");
 
     const chatId = ctx.chat?.id;
@@ -115,28 +144,56 @@ export async function handleMessage(ctx) {
     console.log(`[MSG] User ${user.telegramId} | Intent: ${intent.action}`, intent);
 
     switch (intent.action) {
-      case "EXPENSE":
-        return await handleExpense(ctx, user, intent);
+      case "EXPENSE": {
+        await handleExpense(ctx, user, intent);
+        await sendSalaryNudgeSafe(
+          ctx,
+          user,
+          SALARY_NUDGE_TRIGGERS.expense,
+          SALARY_NUDGE_EXPENSE_MSG
+        );
+        return;
+      }
       case "LENT":
         return await handleDebt(ctx, user, intent, "LENT");
       case "BORROWED":
         return await handleDebt(ctx, user, intent, "BORROWED");
       case "SETTLE_DEBT":
         return await handleSettle(ctx, user, intent);
-      case "QUERY_EXPENSES":
-        return await handleQueryExpenses(ctx, user, intent);
+      case "QUERY_EXPENSES": {
+        await handleQueryExpenses(ctx, user, intent);
+        const period = intent.period ?? "this_month";
+        if (period === "this_month") {
+          await sendSalaryNudgeSafe(
+            ctx,
+            user,
+            SALARY_NUDGE_TRIGGERS.summary,
+            SALARY_NUDGE_SUMMARY_MSG
+          );
+        }
+        return;
+      }
       case "QUERY_DEBTS":
         return await handleQueryDebts(ctx, user);
       case "QUERY_PERSON_DEBT":
         return await handleQueryPersonDebt(ctx, user, intent);
       case "SUMMARY":
-        return await handleSummary(ctx, user, intent);
+        await handleSummary(ctx, user, intent);
+        await sendSalaryNudgeSafe(
+          ctx,
+          user,
+          SALARY_NUDGE_TRIGGERS.summary,
+          SALARY_NUDGE_SUMMARY_MSG
+        );
+        return;
       case "SET_BUDGET":
         return await handleSetBudget(ctx, user, intent);
       case "QUERY_BUDGET":
         return await handleQueryBudget(ctx, user);
       case "EXPORT":
         return await handleExport(ctx, user, intent);
+      case "SALARY_UPDATE":
+        return await handleSalaryUpdate(ctx, user, intent);
       default:
         await ctx.replyWithMarkdown(UNKNOWN_MSG);
     }
@@ -207,6 +264,48 @@ async function handleSettle(ctx, user, intent) {
   } else {
     await ctx.reply(`I couldn't find an active debt with ${intent.person}.`);
   }
+}
+
+function dayFromIntent(intent) {
+  if (intent.salary_day != null && Number.isFinite(Number(intent.salary_day))) {
+    return Number(intent.salary_day);
+  }
+  if (intent.due_date) {
+    const d = new Date(intent.due_date);
+    if (!Number.isNaN(d.getTime())) return d.getDate();
+  }
+  return null;
+}
+
+function parseSalaryDayInput(text) {
+  const m = String(text).trim().match(/^(\d{1,2})(?:st|nd|rd|th)?$/i);
+  if (!m) return null;
+  const d = Number(m[1]);
+  if (!Number.isInteger(d) || d < 1 || d > 31) return null;
+  return d;
+}
+
+async function handleSalaryUpdate(ctx, user, intent) {
+  if (!intent.amount || Number(intent.amount) <= 0) {
+    return ctx.reply("Please share your monthly salary amount, e.g. 'my salary is 85000'.");
+  }
+
+  const salaryDay = dayFromIntent(intent);
+  if (salaryDay == null) {
+    if (ctx.session) {
+      ctx.session.pendingSalaryAmount = Number(intent.amount);
+    }
+    return ctx.reply(SALARY_DAY_MISSING_MSG);
+  }
+  if (salaryDay < 1 || salaryDay > 31) {
+    return ctx.reply("Salary credit date should be between 1 and 31.");
+  }
+
+  const updated = await setSalaryConfig(user.id, Number(intent.amount), salaryDay);
+  if (ctx.session) delete ctx.session.pendingSalaryAmount;
+  await ctx.replyWithMarkdown(
+    salarySetConfirmation(Number(updated.monthlySalary), updated.salaryCreditDay)
+  );
 }
 
 async function handleQueryExpenses(ctx, user, intent) {

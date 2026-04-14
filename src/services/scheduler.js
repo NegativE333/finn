@@ -3,6 +3,8 @@
 
 import cron from "node-cron";
 import { enqueueYesterdayDigestJobs, runReminderWorkerTick } from "./reminderQueue.js";
+import { sendMonthStartSalaryNudges } from "./salaryService.js";
+import { SALARY_NUDGE_MONTH_START_MSG } from "../utils/formatter.js";
 
 const WORKER_INTERVAL_MS = 10_000;
 
@@ -20,6 +22,25 @@ export function startScheduler(bot) {
         console.log(`[CRON] Enqueued ${enqueued} digest job(s) for ${users} user(s).`);
       } catch (err) {
         console.error("[CRON] Enqueue failed:", err);
+      }
+    },
+    { timezone: "Etc/UTC" }
+  );
+
+  // 1st of month nudge for users who still haven't configured salary.
+  cron.schedule(
+    "5 0 1 * *",
+    async () => {
+      try {
+        const { scanned, sent } = await sendMonthStartSalaryNudges(
+          bot,
+          SALARY_NUDGE_MONTH_START_MSG
+        );
+        console.log(
+          `[CRON] Salary month-start nudges: sent ${sent}, checked ${scanned} user(s).`
+        );
+      } catch (err) {
+        console.error("[CRON] Salary month-start nudge failed:", err);
       }
     },
     { timezone: "Etc/UTC" }

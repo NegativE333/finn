@@ -10,11 +10,11 @@ const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant";
 const SYSTEM_PROMPT = `You are a financial intent extractor. Output ONLY a single JSON object, no markdown.
 
 Schema:
-{"action":string,"amount":number|null,"category":string|null,"note":string|null,"person":string|null,"period":string|null,"due_date":string|null,"spent_on":string|null}
+{"action":string,"amount":number|null,"category":string|null,"note":string|null,"person":string|null,"period":string|null,"due_date":string|null,"spent_on":string|null,"salary_day":number|null}
 
 spent_on: For EXPENSE only — if the user gives a calendar date ("on 10 April", "Apr 10", "10/4/2026"), set to ISO "YYYY-MM-DD". If the year is omitted, use the current calendar year; if that would land more than ~30 days in the future, use the previous year. Null if no explicit date. If both spent_on and period are set, spent_on wins.
 
-action values: EXPENSE | LENT | BORROWED | SETTLE_DEBT | QUERY_EXPENSES | QUERY_DEBTS | QUERY_PERSON_DEBT | SUMMARY | SET_BUDGET | QUERY_BUDGET | EXPORT | UNKNOWN
+action values: EXPENSE | LENT | BORROWED | SETTLE_DEBT | QUERY_EXPENSES | QUERY_DEBTS | QUERY_PERSON_DEBT | SUMMARY | SET_BUDGET | QUERY_BUDGET | EXPORT | SALARY_UPDATE | UNKNOWN
 
 period values: today | yesterday | this_week | last_week | this_month | last_month | all | last_N_days (e.g. "last_7_days")
 
@@ -39,6 +39,12 @@ rent/pg/hostel → Rent
 hotel/flight/trip/vacation → Travel
 
 QUERY_PERSON_DEBT: use when asking about a specific person ("what does Rahul owe me", "how much do I owe Priya", "Amit ka hisaab")
+
+SALARY_UPDATE:
+- Use when user shares monthly salary/income/pay and optionally credit day.
+- Examples: "my salary is 85000", "I get 92000 on the 7th", "salary 75000 every 1st".
+- Set amount to monthly salary value.
+- Set salary_day (1-31) if message includes the credit date/day; else salary_day = null.
 
 CRITICAL — EXPENSE vs QUERY_EXPENSES:
 - EXPENSE = user is LOGGING new spending (they state an amount to save: "spent 200", "40 on chai", "paid 500 for fuel").
@@ -73,6 +79,8 @@ EXAMPLES:
 "Last month summary" → {"action":"SUMMARY","amount":null,"category":null,"note":null,"person":null,"period":"last_month","due_date":null,"spent_on":null}
 "Set budget 3000 for food" → {"action":"SET_BUDGET","amount":3000,"category":"Food & Dining","note":null,"person":null,"period":null,"due_date":null,"spent_on":null}
 "Show budgets" → {"action":"QUERY_BUDGET","amount":null,"category":null,"note":null,"person":null,"period":null,"due_date":null,"spent_on":null}
+"My salary is 85000" → {"action":"SALARY_UPDATE","amount":85000,"category":null,"note":null,"person":null,"period":null,"due_date":null,"spent_on":null,"salary_day":null}
+"I get 92000 on the 7th" → {"action":"SALARY_UPDATE","amount":92000,"category":null,"note":null,"person":null,"period":null,"due_date":null,"spent_on":null,"salary_day":7}
 "Export expenses" → {"action":"EXPORT","amount":null,"category":null,"note":"transactions","person":null,"period":"this_month","due_date":null,"spent_on":null}
 "Export debts" → {"action":"EXPORT","amount":null,"category":null,"note":"debts","person":null,"period":null,"due_date":null,"spent_on":null}`;
 
@@ -104,6 +112,7 @@ function sanitizeIntent(intent, rawMessage) {
       amount: null,
       period: out.period ?? "this_month",
       spent_on: null,
+      salary_day: null,
     };
   }
 
