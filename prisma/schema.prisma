@@ -21,11 +21,30 @@ model User {
   lastNudgeAt    DateTime?       @map("last_nudge_at")
   createdAt      DateTime        @default(now()) @map("created_at")
   transactions   Transaction[]
+  incomes        Income[]
   debts          Debt[]
   budgets        Budget[]
   scheduledJobs  ScheduledJob[]
 
   @@map("users")
+}
+
+enum IncomeSource {
+  salary
+  other
+}
+
+model Income {
+  id        Int          @id @default(autoincrement())
+  userId    Int          @map("user_id")
+  amount    Decimal      @db.Decimal(12, 2)
+  source    IncomeSource
+  note      String?
+  timestamp DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp])
+  @@map("incomes")
 }
 
 model Transaction {

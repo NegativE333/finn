@@ -5,6 +5,11 @@ import { parseIntent } from "../services/nlp.js";
 import { upsertUser } from "../services/userService.js";
 import { logExpense, getTotalForPeriod, getCategoryBreakdown } from "../services/transactionService.js";
 import {
+  getTotalIncomeForPeriod,
+  createManualIncome,
+  tryCreditMonthlySalary,
+} from "../services/incomeService.js";
+import {
   recordDebt,
   settleDebt,
   getLentDebts,
@@ -35,6 +40,10 @@ import {
   budgetAlert,
   undoTransactionKeyboard,
   undoDebtKeyboard,
+  undoIncomeKeyboard,
+  incomeLogged,
+  incomeQuerySummary,
+  salaryIncomeAutoMessage,
   UNKNOWN_MSG,
   ERROR_MSG,
   NLP_RETRY_NOTICE_MSG,
@@ -83,6 +92,10 @@ export async function handleMessage(ctx) {
       await ctx.replyWithMarkdown(
         salarySetConfirmation(Number(updated.monthlySalary), updated.salaryCreditDay)
       );
+      const credit = await tryCreditMonthlySalary(updated);
+      if (credit.credited) {
+        await ctx.replyWithMarkdown(salaryIncomeAutoMessage(Number(updated.monthlySalary)));
+      }
       return;
     }
 
@@ -186,6 +199,10 @@ export async function handleMessage(ctx) {
           SALARY_NUDGE_SUMMARY_MSG
         );
         return;
+      case "ADD_INCOME":
+        return await handleAddIncome(ctx, user, intent);
+      case "QUERY_INCOME":
+        return await handleQueryIncome(ctx, user, intent);
       case "SET_BUDGET":
         return await handleSetBudget(ctx, user, intent);
       case "QUERY_BUDGET":
@@ -306,6 +323,33 @@ async function handleSalaryUpdate(ctx, user, intent) {
   await ctx.replyWithMarkdown(
     salarySetConfirmation(Number(updated.monthlySalary), updated.salaryCreditDay)
   );
+
+  const credit = await tryCreditMonthlySalary(updated);
+  if (credit.credited) {
+    await ctx.replyWithMarkdown(salaryIncomeAutoMessage(Number(updated.monthlySalary)));
+  }
+}
+
+async function handleAddIncome(ctx, user, intent) {
+  if (!intent.amount || intent.amount <= 0) {
+    return ctx.reply('Say the amount, e.g. "received 5000 freelance" or "add income 2000".');
+  }
+
+  const income = await createManualIncome(
+    user.id,
+    Number(intent.amount),
+    intent.note && String(intent.note).trim() ? String(intent.note).trim() : null
+  );
+  const monthly = await getTotalIncomeForPeriod(user.id, "this_month");
+  await ctx.replyWithMarkdown(incomeLogged(income, monthly.total), {
+    reply_markup: undoIncomeKeyboard(income.id),
+  });
+}
+
+async function handleQueryIncome(ctx, user, intent) {
+  const period = intent.period ?? "this_month";
+  const data = await getTotalIncomeForPeriod(user.id, period);
+  await ctx.replyWithMarkdown(incomeQuerySummary(period, data.total, data.count));
 }
 
 async function handleQueryExpenses(ctx, user, intent) {
@@ -397,14 +441,19 @@ async function handleQueryPersonDebt(ctx, user, intent) {
 
 async function handleSummary(ctx, user, intent) {
   const period = intent.period ?? "this_month";
-  const [totalData, breakdown, lent, borrowed] = await Promise.all([
+  const [totalData, breakdown, lent, borrowed, incomeData] = await Promise.all([
     getTotalForPeriod(user.id, period),
     getCategoryBreakdown(user.id, period),
     getLentDebts(user.id),
     getBorrowedDebts(user.id),
+    getTotalIncomeForPeriod(user.id, period),
   ]);
   await ctx.replyWithMarkdown(
-    monthlySummary(period, totalData, breakdown, lent, borrowed)
+    monthlySummary(period, totalData, breakdown, lent, borrowed, {
+      incomeTotal: incomeData.total,
+      monthlySalary: user.monthlySalary != null ? Number(user.monthlySalary) : null,
+      salaryCreditDay: user.salaryCreditDay,
+    })
   );
 }
 

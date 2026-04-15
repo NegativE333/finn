@@ -165,15 +165,74 @@ export function debtList(lentDebts, borrowedDebts) {
   return lines.join("\n").trimEnd();
 }
 
+// ── Income ───────────────────────────────────────────────────────────────────
+
+export function salaryIncomeAutoMessage(amount) {
+  return `*Income*\nMonthly salary *${fmt(amount)}* was added for this month.`;
+}
+
+/**
+ * @param {{ amount: unknown, source: string, note?: string | null }} income
+ * @param {number} monthlyIncomeTotal
+ */
+export function incomeLogged(income, monthlyIncomeTotal) {
+  const label = income.source === "salary" ? "Salary" : "Income";
+  const lines = [`Recorded *${fmt(Number(income.amount))}* · ${label}`];
+  if (income.note) lines.push(`_${income.note}_`);
+  lines.push(``, `Total income this month: *${fmt(monthlyIncomeTotal)}*`);
+  return lines.join("\n");
+}
+
+export function incomeQuerySummary(period, total, count) {
+  const n = Number(count) || 0;
+  return (
+    `*Income · ${periodLabel(period)}*\n\n` +
+    `Total: *${fmt(total)}* · ${n} ${n === 1 ? "entry" : "entries"}`
+  );
+}
+
 // ── Monthly summary ───────────────────────────────────────────────────────────
 
-export function monthlySummary(period, totalData, breakdown, lentDebts, borrowedDebts) {
+/**
+ * @param {{ incomeTotal?: number, monthlySalary?: number | null, salaryCreditDay?: number | null }} [incomeOpts]
+ *        Income totals come from the income ledger; salary fields are only for a hint before the first auto-credit.
+ */
+export function monthlySummary(period, totalData, breakdown, lentDebts, borrowedDebts, incomeOpts = {}) {
+  const incomeTotal = Number(incomeOpts.incomeTotal ?? 0);
+  const monthlySalary = incomeOpts.monthlySalary != null ? Number(incomeOpts.monthlySalary) : null;
+  const salaryCreditDay = incomeOpts.salaryCreditDay != null ? Number(incomeOpts.salaryCreditDay) : null;
+
   const label = periodLabel(period);
-  const lines = [
-    `*Summary · ${label}*`,
-    ``,
-    `Total spent: *${fmt(totalData.total)}*`,
-  ];
+  const lines = [`*Summary · ${label}*`, ``];
+
+  const showMoneyFlow = period === "this_month" || period === "last_month";
+
+  if (showMoneyFlow) {
+    const spent = totalData.total;
+    const left = incomeTotal - spent;
+    lines.push(
+      `Total income: *${fmt(incomeTotal)}*`,
+      `Spent (expenses): *${fmt(spent)}*`,
+      left >= 0
+        ? `Left after expenses: *${fmt(left)}*`
+        : `Over your income by: *${fmt(Math.abs(left))}*`
+    );
+    if (
+      period === "this_month" &&
+      incomeTotal === 0 &&
+      monthlySalary != null &&
+      monthlySalary > 0 &&
+      salaryCreditDay != null &&
+      salaryCreditDay >= 1
+    ) {
+      lines.push(
+        ``,
+        `_Salary of ${fmt(monthlySalary)} is set to auto-add on the ${dayOrdinal(salaryCreditDay)}._`
+      );
+    }
+  } else {
+    lines.push(`Total spent: *${fmt(totalData.total)}*`);
+  }
 
   if (breakdown.length > 0) {
     lines.push(``, `*By category*`);
@@ -203,6 +262,13 @@ export function monthlySummary(period, totalData, breakdown, lentDebts, borrowed
 export function undoTransactionKeyboard(txnId) {
   return {
     inline_keyboard: [[{ text: "Undo", callback_data: `undo_txn:${txnId}` }]],
+  };
+}
+
+/** Undo button for a just-logged income row */
+export function undoIncomeKeyboard(incomeId) {
+  return {
+    inline_keyboard: [[{ text: "Undo", callback_data: `undo_income:${incomeId}` }]],
   };
 }
 
@@ -270,7 +336,8 @@ export function budgetAlert(alerts) {
 export const UNKNOWN_MSG =
   `I didn't understand that. For example, you can say:\n` +
   `• Spent 200 on lunch\n` +
-  `• Lent 500 to Priya\n` +
+  `• Received 5000 freelance (income)\n` +
+  `• Lent 114 to Pranita\n` +
   `• How much did I spend this week?\n` +
   `• Who owes me money?`;
 
@@ -301,9 +368,12 @@ function dayOrdinal(day) {
 }
 
 export function salarySetConfirmation(amount, creditDay) {
-  return `Got it. I'll auto-log *${fmt(amount)}* on the *${dayOrdinal(
-    creditDay
-  )}* every month and track your monthly savings.`;
+  return (
+    `Got it. I'll add *${fmt(amount)}* to *income* on the *${dayOrdinal(
+      creditDay
+    )}* each month.\n` +
+    `You can also log other income anytime, e.g. "received 3000 freelance".`
+  );
 }
 
 export const SALARY_DAY_MISSING_MSG = `What date does it get credited?`;

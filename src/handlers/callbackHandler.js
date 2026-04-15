@@ -4,6 +4,7 @@
 import prisma from "../services/prisma.js";
 import { deleteBudget } from "../services/budgetService.js";
 import { upsertUser } from "../services/userService.js";
+import { deleteIncomeForUser } from "../services/incomeService.js";
 import { fmt } from "../utils/formatter.js";
 
 /**
@@ -34,6 +35,31 @@ export function registerCallbacks(bot) {
       );
     } catch (err) {
       console.error("[CB] undo_txn error:", err);
+      await ctx.answerCbQuery("Could not remove. Try again.");
+    }
+  });
+
+  // ── Undo last income row ──────────────────────────────────────────────────
+  bot.action(/^undo_income:(\d+)$/, async (ctx) => {
+    const incomeId = parseInt(ctx.match[1], 10);
+    const user = await upsertUser(ctx);
+
+    try {
+      const row = await deleteIncomeForUser(incomeId, user.id);
+
+      if (!row) {
+        await ctx.answerCbQuery("Income entry not found or already removed.");
+        return ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+      }
+
+      await ctx.answerCbQuery("Removed.");
+      const src = row.source === "salary" ? "Salary" : "Income";
+      await ctx.editMessageText(
+        `Removed: *${src} ${fmt(Number(row.amount))}*${row.note ? ` · ${row.note}` : ""}`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (err) {
+      console.error("[CB] undo_income error:", err);
       await ctx.answerCbQuery("Could not remove. Try again.");
     }
   });

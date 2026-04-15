@@ -3,6 +3,7 @@
 
 import { upsertUser } from "../services/userService.js";
 import { getTotalForPeriod, getCategoryBreakdown } from "../services/transactionService.js";
+import { getTotalIncomeForPeriod } from "../services/incomeService.js";
 import { getLentDebts, getBorrowedDebts } from "../services/debtService.js";
 import { getBudgetStatus } from "../services/budgetService.js";
 import { exportTransactionsCSV, exportDebtsCSV } from "../services/exportService.js";
@@ -42,6 +43,7 @@ export async function handleHelp(ctx) {
     `• [name] paid me back [amount]\n\n` +
     `*Queries*\n` +
     `• How much did I spend today / this week / this month?\n` +
+    `• Received 5000 freelance / how much income this month?\n` +
     `• Who owes me money? / What do I owe?\n` +
     `• Show my budgets\n\n` +
     `*Budgets*\n` +
@@ -63,14 +65,21 @@ export async function handleSummaryCommand(ctx) {
   const user = await upsertUser(ctx);
   const period = "this_month";
 
-  const [totalData, breakdown, lent, borrowed] = await Promise.all([
+  const [totalData, breakdown, lent, borrowed, incomeData] = await Promise.all([
     getTotalForPeriod(user.id, period),
     getCategoryBreakdown(user.id, period),
     getLentDebts(user.id),
     getBorrowedDebts(user.id),
+    getTotalIncomeForPeriod(user.id, period),
   ]);
 
-  await ctx.replyWithMarkdown(monthlySummary(period, totalData, breakdown, lent, borrowed));
+  await ctx.replyWithMarkdown(
+    monthlySummary(period, totalData, breakdown, lent, borrowed, {
+      incomeTotal: incomeData.total,
+      monthlySalary: user.monthlySalary != null ? Number(user.monthlySalary) : null,
+      salaryCreditDay: user.salaryCreditDay,
+    })
+  );
 }
 
 // ── /week ─────────────────────────────────────────────────────────────────────

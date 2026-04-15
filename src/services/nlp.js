@@ -82,6 +82,20 @@ Examples:
 "Set budget 3000 for food" -> {"action":"SET_BUDGET","amount":3000,"category":"Food & Dining","note":null,"person":null,"period":null,"due_date":null,"spent_on":null,"salary_day":null}
 "Show budgets" -> {"action":"QUERY_BUDGET","amount":null,"category":null,"note":null,"person":null,"period":null,"due_date":null,"spent_on":null,"salary_day":null}`;
 
+const INCOME_PROMPT = `${BASE_SCHEMA}
+Actions allowed: ADD_INCOME | QUERY_INCOME | UNKNOWN.
+period values for QUERY_INCOME: today | this_week | last_week | this_month | last_month | all | last_N_days
+Rules:
+- ADD_INCOME: money received (freelance, gift, refund) — not monthly salary setup (that is SALARY_UPDATE) and not debt repayment.
+- QUERY_INCOME: asking total income / how much earned.
+- note: short label when present.
+
+Examples:
+"received 8000 freelance" -> {"action":"ADD_INCOME","amount":8000,"category":null,"note":"freelance","person":null,"period":null,"due_date":null,"spent_on":null,"salary_day":null}
+"add income 5000 bonus" -> {"action":"ADD_INCOME","amount":5000,"category":null,"note":"bonus","person":null,"period":null,"due_date":null,"spent_on":null,"salary_day":null}
+"how much income this month" -> {"action":"QUERY_INCOME","amount":null,"category":null,"note":null,"person":null,"period":"this_month","due_date":null,"spent_on":null,"salary_day":null}
+"total income last month" -> {"action":"QUERY_INCOME","amount":null,"category":null,"note":null,"person":null,"period":"last_month","due_date":null,"spent_on":null,"salary_day":null}`;
+
 const EXPORT_PROMPT = `${BASE_SCHEMA}
 Actions allowed: EXPORT | UNKNOWN.
 For export requests set action EXPORT and put note="debts" for debt export, else note="transactions".
@@ -90,7 +104,7 @@ Examples:
 "Export debts" -> {"action":"EXPORT","amount":null,"category":null,"note":"debts","person":null,"period":null,"due_date":null,"spent_on":null,"salary_day":null}`;
 
 const GENERAL_PROMPT = `${BASE_SCHEMA}
-Actions allowed: EXPENSE | LENT | BORROWED | SETTLE_DEBT | QUERY_EXPENSES | QUERY_DEBTS | QUERY_PERSON_DEBT | SUMMARY | SET_BUDGET | QUERY_BUDGET | EXPORT | SALARY_UPDATE | UNKNOWN.
+Actions allowed: EXPENSE | LENT | BORROWED | SETTLE_DEBT | QUERY_EXPENSES | QUERY_DEBTS | QUERY_PERSON_DEBT | SUMMARY | SET_BUDGET | QUERY_BUDGET | EXPORT | SALARY_UPDATE | ADD_INCOME | QUERY_INCOME | UNKNOWN.
 ${CATEGORY_RULES}`;
 
 /** Never treat these as a counterparty name (owner / bot / generic). */
@@ -98,11 +112,28 @@ const INVALID_PERSON = /^(you|u|me|i|myself|yourself|user|finn|bot|assistant|tel
 
 function detectPromptType(message) {
   const s = String(message || "").toLowerCase();
-  if (/(salary|income|credited|get paid|payday|monthly pay)/.test(s)) return "salary";
-  if (/(export|csv|download)/.test(s)) return "export";
-  if (/(budget|limit)/.test(s)) return "budget";
-  if (/(lent|borrow|borrowed|owe|owed|settle|hisaab|paid me back|who owes)/.test(s)) return "debt";
-  if (/(spent|spend|expense|summary|how much|total|yesterday|today|month|week|chai|petrol|food|grocery|rent|travel)/.test(s)) return "expense";
+  if (/\b(export|csv|download)\b/.test(s)) return "export";
+  if (/\b(budget|limit)\b/.test(s)) return "budget";
+  if (/\b(lent|borrow|borrowed|owe|owed|settle|hisaab|paid me back|who owes)\b/.test(s)) return "debt";
+  if (
+    /\b(salary|monthly pay|payroll|payday)\b|\bget paid\b|\bcredited on\b|\b(my )?(monthly )?income is\b/i.test(s)
+  ) {
+    return "salary";
+  }
+  if (
+    /\b(how much|what( is|'s)|total)\b.*\b(income|earn|earned|receive|received)\b|\bincome\b.*\b(this month|last month|week|today)\b|\badd income\b|\breceived \d|\bi received \d|\b(i )?earned \d|\bextra income\b/i.test(
+      s
+    )
+  ) {
+    return "income";
+  }
+  if (
+    /\b(spent|spend|expense|summary|how much|total|yesterday|today|month|week|chai|petrol|food|grocery|rent|travel)\b/.test(
+      s
+    )
+  ) {
+    return "expense";
+  }
   return "general";
 }
 
@@ -111,6 +142,7 @@ function promptFor(type) {
   if (type === "export") return EXPORT_PROMPT;
   if (type === "budget") return BUDGET_PROMPT;
   if (type === "debt") return DEBT_PROMPT;
+  if (type === "income") return INCOME_PROMPT;
   if (type === "expense") return EXPENSE_PROMPT;
   return GENERAL_PROMPT;
 }

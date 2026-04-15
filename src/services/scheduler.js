@@ -4,6 +4,7 @@
 import cron from "node-cron";
 import { enqueueYesterdayDigestJobs, runReminderWorkerTick } from "./reminderQueue.js";
 import { sendMonthStartSalaryNudges } from "./salaryService.js";
+import { processSalaryCreditsForAllUsers } from "./incomeService.js";
 import { SALARY_NUDGE_MONTH_START_MSG } from "../utils/formatter.js";
 
 const WORKER_INTERVAL_MS = 10_000;
@@ -22,6 +23,22 @@ export function startScheduler(bot) {
         console.log(`[CRON] Enqueued ${enqueued} digest job(s) for ${users} user(s).`);
       } catch (err) {
         console.error("[CRON] Enqueue failed:", err);
+      }
+    },
+    { timezone: "Etc/UTC" }
+  );
+
+  // Daily: auto-add monthly salary to income on each user's salary credit day (see SALARY_CREDIT_TZ).
+  cron.schedule(
+    "10 1 * * *",
+    async () => {
+      try {
+        const { checked, credited } = await processSalaryCreditsForAllUsers(bot);
+        console.log(
+          `[CRON] Salary → income: ${credited} credited, ${checked} user(s) with salary configured.`
+        );
+      } catch (err) {
+        console.error("[CRON] Salary income credits failed:", err);
       }
     },
     { timezone: "Etc/UTC" }
