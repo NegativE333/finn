@@ -146,12 +146,27 @@ async function launch() {
       console.log("Finn long-polling (local dev)");
     }
     startScheduler(bot);
-    console.log("Finn is online.\n");
-    await bot.launch();
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    const me = await bot.telegram.getMe();
+    console.log(
+      `Finn is online. Message @${me.username} in Telegram (this token only).\n`
+    );
+    await bot.launch({
+      dropPendingUpdates: true,
+      allowedUpdates: ["message", "callback_query"],
+    });
   }
 }
 
-launch();
+launch().catch((err) => {
+  console.error("[BOOT] Launch failed:", err.message ?? err);
+  if (err.response?.error_code === 409) {
+    console.error(
+      "[BOOT] Another process is already polling this bot token. Stop extra `npm run dev` / deployed instances using the same token, then restart."
+    );
+  }
+  process.exit(1);
+});
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 process.once("SIGINT", async () => {
